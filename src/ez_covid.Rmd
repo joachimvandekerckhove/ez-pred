@@ -1,0 +1,64 @@
+---
+title: "EZDDM JAGS Model with COVID indicator"
+author: ""
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Step 1: Set Up Working Environment
+
+Prepare a fresh new R environment by removing previous variables and loading necessary libraries.
+
+```{r}
+# Fresh new working environment
+graphics.off() # close windows
+rm(list = ls())  # clear memory
+
+# Load required libraries
+library(readr)
+library(R2jags)
+library(dplyr)
+```
+
+## Step 2: Load and Prepare Data
+
+We will load the data and clean it, selecting only the relevant variables for modeling.
+
+```{r}
+# Load and prepare the data
+dfile <- "../data/processed/summarized_demographics_experiment_data_numeric.csv"
+raw_data <- read_csv(dfile)
+
+# Clean and prepare the data for DDM analysis
+data_for_jags <- raw_data %>%
+  select(mean_RT_sec, variance_RT_sec, total_accuracy, participant_id, covid, 
+         nTrials, StudyTimeCoded, ChoiceUrgencyCoded, ProbOfChangeCoded,
+         ProbeTypeCoded, age, raceNew_numeric, ethnicity_numeric,
+         sex_numeric, education_numeric, version_numeric) %>%
+  rename(meanRT  = mean_RT_sec, 
+         varRT   = variance_RT_sec, 
+         correct = total_accuracy) %>%
+  na.omit()
+
+data_for_jags$version_numeric <- 1 +
+  1 * data_for_jags$StudyTimeCoded +
+  2 * data_for_jags$ChoiceUrgencyCoded + 
+  4 * data_for_jags$ProbOfChangeCoded + 
+  8 * data_for_jags$ProbeTypeCoded
+```
+
+## Step 3: Modeling Overview
+
+The next steps involve defining the JAGS model, setting up data, and running the model.
+Below are pointers for these modeling tasks:
+
+- Define the JAGS model, specifying prior distributions for hierarchical EZDDM parameters.
+- Focus specifically on a predictive equation that either uses or predicts the covid indicator.
+- Set up data for JAGS, including creating a list of variables for JAGS to use in the modeling.
+- Specify initial values and run the JAGS model using `jags()` function.
+- Extract and analyze the summary statistics for model parameters.
+
