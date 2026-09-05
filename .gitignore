@@ -1,0 +1,18 @@
+# Rendered output files
+*.html
+*.pdf
+*.docx
+*.log
+*.tex
+
+# R temporary files
+.Rhistory
+.RData
+.Rproj.user
+
+# JAGS output
+coda*
+
+# OS files
+.DS_Store
+Thumbs.db
