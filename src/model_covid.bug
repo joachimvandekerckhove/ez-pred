@@ -1,0 +1,108 @@
+model {
+  ##### Priors for group-level DDM parameters
+  drift_mean ~ dnorm(1.0, (0.5^-2))
+  bound_mean ~ dnorm(1.5, (0.3^-2))T(0.10, 3.00)
+  nondt_mean ~ dnorm(0.30, (0.10^-2))T(0.05, )
+
+  drift_sdev ~ dunif(0.01, 2.00)
+  bound_sdev ~ dunif(0.01, 1.00)
+  nondt_sdev ~ dunif(0.01, 0.50)
+
+  ##### Priors for experimental manipulation effects
+  # StudyTime affects drift (manipulates evidence quality)
+  beta_ST_drift ~ dnorm(0.00, 1.00)
+  # ChoiceUrgency affects boundary (manipulates speed-accuracy tradeoff)
+  beta_CU_bound ~ dnorm(0.00, 1.00)
+  # ProbOfChange affects initial bias (drift rate in EZ)
+  beta_PC_drift ~ dnorm(0.00, 1.00)
+  # ProbeType is included but not a DDM manipulation
+  beta_PT_drift ~ dnorm(0.00, 1.00)
+  beta_PT_bound ~ dnorm(0.00, 1.00)
+  beta_PT_nondt ~ dnorm(0.00, 1.00)
+
+  ##### Priors for COVID effects (key effects of interest)
+  # COVID affects drift rate (processing efficiency)
+  beta_covid_drift ~ dnorm(0.00, 1.00)
+  # COVID affects boundary separation (response caution)
+  beta_covid_bound ~ dnorm(0.00, 1.00)
+  # COVID affects non-decision time (encoding/motor speed)
+  beta_covid_nondt ~ dnorm(0.00, 1.00)
+
+  ##### Priors for demographic controls
+  beta_age_drift ~ dnorm(0.00, 0.10)
+  beta_age_bound ~ dnorm(0.00, 0.10)
+  beta_age_nondt ~ dnorm(0.00, 0.10)
+  beta_sex_drift ~ dnorm(0.00, 1.00)
+  beta_sex_bound ~ dnorm(0.00, 1.00)
+  beta_sex_nondt ~ dnorm(0.00, 1.00)
+  beta_edu_drift ~ dnorm(0.00, 0.50)
+  beta_edu_bound ~ dnorm(0.00, 0.50)
+  beta_edu_nondt ~ dnorm(0.00, 0.50)
+
+  ##### Participant-level random effects (hierarchical structure)
+  for (i in 1:N_participants) {
+    drift_subj[i] ~ dnorm(0, (drift_sdev^-2))
+    bound_subj[i] ~ dnorm(0, (bound_sdev^-2))
+    nondt_subj[i] ~ dnorm(0, (nondt_sdev^-2))
+  }
+
+  ##### Observation-level model
+  for (p in 1:N_obs) {
+    # Predicted DDM parameters from regression structure
+    # Participant-specific baseline + COVID effect + condition effects + demographics
+    drift_pred[p] = drift_mean + drift_subj[participant_idx[p]] 
+                    + beta_covid_drift * covid[p]
+                    + beta_ST_drift * StudyTime[p]
+                    + beta_PC_drift * ProbOfChange[p]
+                    + beta_PT_drift * ProbeType[p]
+                    + beta_age_drift * age[p]
+                    + beta_sex_drift * sex[p]
+                    + beta_edu_drift * education[p]
+
+    bound_pred[p] = bound_mean + bound_subj[participant_idx[p]]
+                      + beta_covid_bound * covid[p]
+                      + beta_CU_bound * ChoiceUrgency[p]
+                      + beta_PT_bound * ProbeType[p]
+                      + beta_age_bound * age[p]
+                      + beta_sex_bound * sex[p]
+                      + beta_edu_bound * education[p]
+
+    nondt_pred[p] = nondt_mean + nondt_subj[participant_idx[p]]
+                    + beta_covid_nondt * covid[p]
+                    + beta_PT_nondt * ProbeType[p]
+                    + beta_age_nondt * age[p]
+                    + beta_sex_nondt * sex[p]
+                    + beta_edu_nondt * education[p]
+
+    # Individual DDM parameters (no additional noise at observation level)
+    drift[p] = drift_pred[p]
+    bound[p] = bound_pred[p]
+    nondt[p] = nondt_pred[p]
+
+    # Forward EZ-DDM equations (deterministic)
+    ey[p]  = exp(-bound[p] * drift[p])
+    Pc[p]  = 1 / (1 + ey[p])
+
+    # Precision of RT distribution
+    PRT[p] = 2 * pow(drift[p], 3) / bound[p] *
+             pow(ey[p] + 1, 2) / (2 * -bound[p] *
+             drift[p] * ey[p] - ey[p] * ey[p] + 1)
+
+    # Mean decision time
+    MDT[p] = (bound[p] / (2 * drift[p])) *
+             (1 - ey[p]) / (1 + ey[p])
+
+    # Mean response time (decision + non-decision)
+    MRT[p] = MDT[p] + nondt[p]
+
+    # Sampling distributions for observed summary statistics
+    # Number correct ~ Binomial(prob_correct, nTrials)
+    correct[p] ~ dbin(Pc[p], nTrials[p])
+
+    # RT variance ~ Normal(1/PRT, sampling variance)
+    varRT[p] ~ dnorm(1/PRT[p], 0.5 * (nTrials[p] - 1) * PRT[p] * PRT[p])
+
+    # Mean RT ~ Normal(MRT, sampling variance)
+    meanRT[p] ~ dnorm(MRT[p], PRT[p] * nTrials[p])
+  }
+}
