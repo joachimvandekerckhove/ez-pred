@@ -1,0 +1,30 @@
+model {
+  # Group-level priors
+  drift_mean ~ dnorm(1.0, pow(0.5, -2))
+  bound_mean ~ dnorm(1.5, pow(0.3, -2))T(0.10, 3.00)
+  nondt_mean ~ dnorm(0.30, pow(0.10, -2))T(0.05, )
+
+  drift_sdev ~ dunif(0.01, 2.00)
+  bound_sdev ~ dunif(0.01, 1.00)
+  nondt_sdev ~ dunif(0.01, 0.50)
+
+  for (p in 1:N_obs) {
+    drift[p] ~ dnorm(drift_mean, pow(drift_sdev, -2))
+    bound[p] ~ dnorm(bound_mean, pow(bound_sdev, -2))T(0.10, 3.00)
+    nondt[p] ~ dnorm(nondt_mean, pow(nondt_sdev, -2))T(0.05, )
+
+    # Forward EZ-DDM equations
+    ey[p]  <- exp(-bound[p] * drift[p])
+    Pc[p]  <- 1 / (1 + ey[p])
+    PRT[p] <- 2 * pow(drift[p], 3) / bound[p] *
+              pow(ey[p] + 1, 2) /
+              (1 - 2 * bound[p] * drift[p] * ey[p] - pow(ey[p], 2))
+    MDT[p] <- (bound[p] / (2 * drift[p])) * (1 - ey[p]) / (1 + ey[p])
+    MRT[p] <- MDT[p] + nondt[p]
+
+    # Sampling distributions
+    correct[p] ~ dbin(Pc[p], nTrials[p])
+    varRT[p]   ~ dnorm(1/PRT[p], 0.5 * (nTrials[p] - 1) * PRT[p] * PRT[p])
+    meanRT[p]  ~ dnorm(MRT[p], PRT[p] * nTrials[p])
+  }
+}
